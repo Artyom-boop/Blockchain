@@ -7,10 +7,7 @@ import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 public class Node {
@@ -54,12 +51,26 @@ public class Node {
         return false;
     }
 
-    public void sendMessage(STATUS STATUS, int port, Block... blocks) {
+    public void start() {
+        scheduledThreadPoolExecutor.execute(() -> {
+            try {
+                serverSocket = new ServerSocket(port);
+                while (true) {
+                    new Server(Node.this, serverSocket.accept()).start();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+        nodes.forEach(peer -> sendMessage(STATUS.REQ, peer, null));
+    }
+
+    public void sendMessage(STATUS STATUS, int port, Block blocks) {
         try (Socket socket = new Socket("localhost", port); ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream()); ObjectInputStream objectInputStream = new ObjectInputStream(socket.getInputStream())) {
             Message message = (Message) objectInputStream.readObject();
             while (message != null) {
                 if (message.getStatus() == STATUS.READY) {
-                    objectOutputStream.writeObject(new Message(Arrays.asList(blocks), this.port, port, STATUS));
+                    objectOutputStream.writeObject(new Message(Collections.singletonList(blocks), this.port, port, STATUS));
                 } else if (message.getStatus() == STATUS.RSP) {
                     if (!message.getBlocks().isEmpty() && this.blockchain.size() == 1) {
                         blockchain = new ArrayList<>(message.getBlocks());
