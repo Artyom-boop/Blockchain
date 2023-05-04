@@ -1,17 +1,28 @@
-version: '3'
+version: '3.8'
 services:
   node1:
     image: blockchain
     container_name: node1
-    network_mode: host
+    hostname: node1
+    networks:
+      - blockchain
     command: "8001"
+
   node2:
     image: blockchain
     container_name: node2
-    network_mode: host
+    hostname: node2
+    networks:
+      - blockchain
     command: "8002"
+
   node3:
     image: blockchain
     container_name: node3
-    network_mode: host
+    hostname: node3
+    networks:
+      - blockchain
     command: "8003"
+
+networks:
+  blockchain:
