@@ -4,6 +4,7 @@ import org.apache.commons.lang3.RandomStringUtils;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
@@ -11,14 +12,14 @@ import java.util.*;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 public class Node {
-    private final List<Integer> nodes;
+    private final Map<Integer, String> nodes;
     private List<Block> blockchain = new ArrayList<>();
     private final int port;
     private ServerSocket serverSocket;
     private final ScheduledThreadPoolExecutor scheduledThreadPoolExecutor = new ScheduledThreadPoolExecutor(4);
 
     public Node(int port) {
-        nodes = List.of(8001, 8002, 8003);
+        nodes = Map.of(8001, "node1", 8002, "node2", 8003, "node3");
         this.port = port;
         Block first = new Block(0, "root", "root");
         first.setHash("22e400d5a4b0041f9164d9381ecb287de85cf369d1b88321e6414cf8d3cd0000");
@@ -33,7 +34,13 @@ public class Node {
         String data = RandomStringUtils.random(256, true, true);
         Block block = new Block(index, prev.getHash(), data);
         block.setHash(block.calculationHash(data));
-        nodes.forEach(peer -> sendMessage(STATUS.NEW, peer, block));
+        nodes.forEach((key, value) -> {
+            try {
+                sendMessage(STATUS.NEW, key, value, block);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 
     private Block getPrevBlock() {
@@ -62,11 +69,30 @@ public class Node {
                 e.printStackTrace();
             }
         });
-        nodes.forEach(peer -> sendMessage(STATUS.REQ, peer, null));
+        nodes.forEach((key, value) -> {
+            try {
+                sendMessage(STATUS.REQ, key, value, null);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 
-    public void sendMessage(STATUS STATUS, int port, Block blocks) {
-        try (Socket socket = new Socket("localhost", port); ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream()); ObjectInputStream objectInputStream = new ObjectInputStream(socket.getInputStream())) {
+    private boolean hostInMap(String hostname) {
+        for (var entry : nodes.entrySet()) {
+            if (Objects.equals(hostname, entry.getValue())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void sendMessage(STATUS STATUS, int port, String host, Block blocks) throws IOException {
+        String hostname = InetAddress.getLocalHost().getHostName();
+        if (hostInMap(hostname)) {
+            hostname = host;
+        }
+        try (Socket socket = new Socket(hostname, port); ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream()); ObjectInputStream objectInputStream = new ObjectInputStream(socket.getInputStream())) {
             Message message = (Message) objectInputStream.readObject();
             while (message != null) {
                 if (message.getStatus() == STATUS.READY) {
